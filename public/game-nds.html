@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GBA Portal – NDS Game</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+  <!-- Required for WASM threads -->
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
+  <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
+  <style>
+    body { overflow: hidden; }
+    .game-layout { height: calc(100vh - 64px); }
+    /* NDS dual-screen emulator area – allow vertical scroll for tall content */
+    .emulator-wrap.nds-mode {
+      aspect-ratio: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .emulator-wrap.nds-mode::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.05) 2px, rgba(0,0,0,0.05) 4px
+      );
+      pointer-events: none;
+      z-index: 5;
+    }
+    /* EmulatorJS container – absolute positioning guarantees it fills
+       .emulator-wrap regardless of flex alignment rules, fixing the
+       blank-canvas issue.  overflow-y lets the NDS dual-screen
+       content scroll when it is taller than the viewport. */
+    #nds-emulator {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+<!-- Minimal navbar for game room -->
+<nav class="navbar" style="height:64px;padding:8px 16px;">
+  <a href="/lobby" class="navbar-brand" style="font-size:1.2rem;">🎮 GBA Portal</a>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span id="lobby-name-display" style="font-family:var(--font-heading);font-size:.95rem;color:var(--text-secondary);"></span>
+    <span class="console-badge nds" style="font-size:.75rem;">NDS</span>
+    <div class="lc-status inactive" id="lc-indicator">
+      <div class="lc-dot"></div>
+      <span>NDS Link</span>
+    </div>
+    <button class="btn btn-secondary btn-sm" id="lc-toggle-btn" title="Toggle NDS Wireless Link">📡 Connect</button>
+    <button class="btn btn-ghost btn-sm" id="save-btn">💾 Save</button>
+    <button class="btn btn-secondary btn-sm" id="spectate-btn" style="display:none;">👁️ Spectate</button>
+    <div class="volume-control">
+      <button class="btn-icon" id="mute-btn" title="Mute / Unmute">🔊</button>
+      <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="100" title="Volume">
+    </div>
+    <button class="btn btn-danger btn-sm" id="leave-btn">✕ Leave</button>
+  </div>
+</nav>
+<div id="toast-container" class="toast-container"></div>
+
+<div class="page" style="padding-top:64px;">
+  <div class="game-layout">
+    <!-- Main emulator area -->
+    <div class="game-main">
+      <div class="emulator-wrap nds-mode" id="emulator-wrap">
+        <div class="emulator-resize-handle" id="emulator-resize-handle"></div>
+        <!-- Overlay shown before game starts -->
+        <div class="emulator-overlay" id="emulator-overlay">
+          <div class="emulator-logo">NDS</div>
+          <p id="overlay-msg" style="color:var(--text-secondary);font-size:1rem;">Loading emulator…</p>
+          <div class="progress-bar" style="width:240px;">
+            <div class="progress-fill" id="load-progress" style="width:0%"></div>
+          </div>
+          <button class="btn btn-primary btn-lg" id="start-game-btn" style="display:none;">
+            ▶ Start Game
+          </button>
+        </div>
+
+        <!-- Spectator view -->
+        <div id="spectator-container" style="display:none;width:100%;height:100%;flex-direction:column;">
+          <div id="spectator-grid" class="spectator-grid"></div>
+          <div id="spectator-main" style="display:none;flex:1;min-height:0;position:relative;align-items:center;justify-content:center;background:#000;">
+            <img id="spectator-view" class="spectator-frame" alt="Game stream">
+            <button id="spectator-back-btn" class="btn btn-ghost btn-sm spectator-back-btn" style="display:none;">← Back to Grid</button>
+          </div>
+        </div>
+
+        <!-- EmulatorJS NDS container -->
+        <div id="nds-emulator" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Sidebar: players + chat -->
+    <div class="game-sidebar">
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:1rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.08em;">Players</h3>
+        <div class="player-list" id="player-list"></div>
+        <div class="divider"></div>
+        <h3 style="margin-bottom:10px;font-size:.85rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;">Spectators</h3>
+        <div class="player-list" id="spectator-list"></div>
+      </div>
+
+      <!-- Sidebar tab bar -->
+      <div class="sidebar-tabs" id="sidebar-tabs">
+        <button class="sidebar-tab-btn active" id="sidebar-tab-chat" data-tab="chat">💬 Chat</button>
+        <button class="sidebar-tab-btn" id="sidebar-tab-watch" data-tab="watch">👁 Watch</button>
+      </div>
+
+      <!-- Chat panel -->
+      <div class="card chat-box sidebar-panel" id="sidebar-panel-chat" style="flex:1;min-height:0;padding:0;">
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-row">
+          <input type="text" class="chat-input" id="chat-input" placeholder="Type a message…" maxlength="200">
+          <button class="btn btn-primary btn-sm" id="chat-send">Send</button>
+        </div>
+      </div>
+
+      <!-- Watch panel -->
+      <div class="card sidebar-panel" id="sidebar-panel-watch" style="flex:1;min-height:0;padding:0;display:none;">
+        <div class="sidebar-spectator-grid" id="sidebar-spectator-grid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/socket.io.min.js"></script>
+<script src="/js/common.js"></script>
+<script defer src="/js/game-nds.js"></script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Portal – Play Together</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+<body>
+
+<div class="hero-glow"></div>
+
+<!-- Landing Page (shown when not authenticated) -->
+<section class="page" id="landing-page">
+  <div class="hero">
+    <span class="hero-tag">✨ Open Source GBA Emulator</span>
+    <h1>Play GBA Together,<br>Online</h1>
+    <p>
+      High-accuracy GBA emulation powered by mGBA. Trade Pokémon, battle friends,
+      and relive classic adventures — directly in your browser with Google sign-in.
+    </p>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;">
+      <a href="/auth/google" class="btn-google" id="login-btn">
+        <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
+        </svg>
+        Sign in with Google
+      </a>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin:20px auto;max-width:320px;">
+      <div style="flex:1;height:1px;background:var(--border,#333);"></div>
+      <span style="color:var(--text-muted,#888);font-size:.85rem;">or</span>
+      <div style="flex:1;height:1px;background:var(--border,#333);"></div>
+    </div>
+    <form id="username-login-form" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:360px;margin:0 auto;">
+      <input type="text" id="username-input" class="form-input" placeholder="Enter a username" required
+             minlength="2" maxlength="30" pattern="[a-zA-Z0-9 _-]{2,30}"
+             style="flex:1;min-width:180px;">
+      <button type="submit" class="btn btn-primary">Sign in</button>
+    </form>
+  </div>
+
+  <div class="container">
+    <div class="features-grid">
+      <div class="card feature-card fade-in">
+        <span class="feature-icon">🔗</span>
+        <h3>Link Cable Multiplayer</h3>
+        <p>Authentic GBA SIO Multiplay protocol emulated over WebSockets. Trade and battle like the original hardware.</p>
+      </div>
+      <div class="card feature-card fade-in" style="animation-delay:.1s">
+        <span class="feature-icon">🎯</span>
+        <h3>High Accuracy</h3>
+        <p>Powered by mGBA — the most accurate GBA emulator available, supporting all Pokémon Gen III games perfectly.</p>
+      </div>
+      <div class="card feature-card fade-in" style="animation-delay:.2s">
+        <span class="feature-icon">🏟️</span>
+        <h3>Lobby System</h3>
+        <p>Create or join game lobbies. Play with up to 4 people or spectate ongoing sessions in real time.</p>
+      </div>
+      <div class="card feature-card fade-in" style="animation-delay:.3s">
+        <span class="feature-icon">💾</span>
+        <h3>Cloud Saves</h3>
+        <p>Your Pokémon save files are tied to your Google account — never lose your progress again.</p>
+      </div>
+      <div class="card feature-card fade-in" style="animation-delay:.4s">
+        <span class="feature-icon">👁️</span>
+        <h3>Spectator Mode</h3>
+        <p>Watch friends play in real time. Cheer them on as they take on the Elite Four!</p>
+      </div>
+      <div class="card feature-card fade-in" style="animation-delay:.5s">
+        <span class="feature-icon">📱</span>
+        <h3>Mobile Friendly</h3>
+        <p>On-screen GBA controls for touch devices. Play anywhere, on any device.</p>
+      </div>
+    </div>
+
+    <div style="text-align:center;padding:40px 0 60px;color:var(--text-muted);font-size:.85rem;">
+      Powered by <a href="https://mgba.io" target="_blank">mGBA</a> &mdash; GPL-2.0 Open Source<br>
+      You must own the games you play. ROMs are managed by the portal administrator.
+    </div>
+  </div>
+</section>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="/js/common.js"></script>
+<script>
+  (async () => {
+    const user = await getCurrentUser();
+    if (user) {
+      window.location.href = '/lobby';
+    }
+    const err = new URLSearchParams(window.location.search).get('error');
+    if (err === 'auth_failed') showToast('Google sign-in failed. Please try again.', 'error');
+
+    // Username login form
+    document.getElementById('username-login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('username-input');
+      const username = input.value.trim();
+      if (!username) return;
+
+      const btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+
+      try {
+        await apiFetch('/auth/local', {
+          method: 'POST',
+          body: JSON.stringify({ username }),
+        });
+        window.location.href = '/lobby';
+      } catch (fetchErr) {
+        showToast(fetchErr.message || 'Login failed', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    });
+  })();
+</script>
+</body>
+</html>

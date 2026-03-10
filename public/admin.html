@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Portal – Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+<body>
+<nav class="navbar" id="navbar"></nav>
+<div id="toast-container" class="toast-container"></div>
+
+<div class="page">
+  <div class="container">
+    <div class="section">
+      <h1 class="page-title">⚙ Admin Panel</h1>
+      <p class="page-subtitle">Manage ROMs and Users</p>
+
+      <div class="admin-grid">
+        <!-- ROM Management -->
+        <div>
+          <div class="card" style="margin-bottom:20px;">
+            <h2 style="font-size:1.3rem;margin-bottom:20px;">📀 ROM Management</h2>
+
+            <div class="upload-area" id="upload-area">
+              <input type="file" id="rom-file-input" accept=".gba,.gbc,.gb,.nds,.zip">
+              <div class="upload-icon">📂</div>
+              <p>Drop a ROM file here or <strong>click to browse</strong></p>
+              <p style="font-size:.8rem;margin-top:6px;color:var(--text-muted)">Supported: .gba, .gbc, .gb, .nds, .zip — Max 1 GB</p>
+            </div>
+
+            <div id="upload-form" style="display:none;margin-top:16px;">
+              <div class="form-group">
+                <label class="form-label">Display Name</label>
+                <input type="text" id="rom-display-name" class="form-input" placeholder="e.g. Pokémon Emerald" maxlength="80">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Selected File</label>
+                <input type="text" id="rom-file-name" class="form-input" readonly>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <button class="btn btn-primary" id="upload-confirm-btn">Upload ROM</button>
+                <button class="btn btn-ghost" id="upload-cancel-btn">Cancel</button>
+              </div>
+              <div class="progress-bar" style="margin-top:12px;display:none;" id="upload-progress-wrap">
+                <div class="progress-fill" id="upload-progress" style="width:0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <h3>Uploaded ROMs</h3>
+              <button class="btn btn-ghost btn-sm" id="refresh-roms-btn">↻ Refresh</button>
+            </div>
+            <div class="rom-list" id="rom-list">
+              <div class="empty-state" style="padding:30px;">
+                <span class="empty-state-icon" style="font-size:2rem;">📀</span>
+                <p>No ROMs uploaded yet</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Management -->
+        <div>
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <h2 style="font-size:1.3rem;">👥 User Management</h2>
+              <button class="btn btn-ghost btn-sm" id="refresh-users-btn">↻ Refresh</button>
+            </div>
+            <div class="user-list" id="user-list">
+              <div class="empty-state" style="padding:30px;">
+                <span class="empty-state-icon" style="font-size:2rem;">👤</span>
+                <p>No users yet</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

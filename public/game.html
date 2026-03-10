@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Portal – GBA Game</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+  <!-- Required for mGBA WASM threads -->
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
+  <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
+  <style>
+    body { overflow: hidden; }
+    .game-layout { height: calc(100vh - 64px); }
+    /* GBA emulator area – height-first sizing:
+       The canvas fills the available vertical space and its width is derived
+       from the 3:2 GBA aspect ratio.  On narrow viewports max-width:100%
+       prevents horizontal overflow so the canvas shrinks gracefully. */
+    .emulator-wrap.gba-mode {
+      height: 100%;
+      width: auto;
+      max-width: 100%;
+      aspect-ratio: 3 / 2;
+      flex: none;
+      overflow: hidden;
+      margin-inline: auto;
+    }
+    .emulator-wrap.gba-mode::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 5;
+    }
+    /* EmulatorJS container – absolute positioning guarantees it fills
+       .emulator-wrap regardless of flex alignment rules. */
+    #gba-emulator {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+<!-- Minimal navbar for game room -->
+<nav class="navbar" style="height:64px;padding:8px 16px;">
+  <a href="/lobby" class="navbar-brand" style="font-size:1.2rem;">🎮 Game Portal</a>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span id="lobby-name-display" style="font-family:var(--font-heading);font-size:.95rem;color:var(--text-secondary);"></span>
+    <div class="lc-status inactive" id="lc-indicator">
+      <div class="lc-dot"></div>
+      <span>Link Cable</span>
+    </div>
+    <button class="btn btn-secondary btn-sm" id="lc-toggle-btn" title="Toggle Link Cable Multiplayer">🔗 Connect</button>
+    <button class="btn btn-secondary btn-sm" id="peer-lc-btn" title="PeerJS Direct Trade (P2P)">🎴 Trade</button>
+    <button class="btn btn-ghost btn-sm" id="lc-diagnostics-btn" title="Link Cable Diagnostics">🩺 Diag</button>
+    <button class="btn btn-ghost btn-sm" id="save-btn">💾 Save</button>
+    <button class="btn btn-ghost btn-sm" id="load-btn">📂 Load</button>
+    <!-- Audio stream toggle (opt-in): player starts capture; spectator enables playback -->
+    <button class="btn btn-ghost btn-sm" id="audio-stream-btn" style="display:none;" title="Toggle audio streaming">🔇 Audio</button>
+    <button class="btn btn-secondary btn-sm" id="spectate-btn" style="display:none;">👁️ Spectate</button>
+    <div class="volume-control">
+      <button class="btn-icon" id="mute-btn" title="Mute / Unmute">🔊</button>
+      <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="100" title="Volume">
+    </div>
+    <button class="btn btn-danger btn-sm" id="leave-btn">✕ Leave</button>
+  </div>
+</nav>
+<div id="toast-container" class="toast-container"></div>
+
+<div class="page" style="padding-top:64px;">
+  <div class="game-layout">
+    <!-- Main emulator area -->
+    <div class="game-main">
+      <div class="emulator-wrap gba-mode" id="emulator-wrap">
+        <div class="emulator-resize-handle" id="emulator-resize-handle"></div>
+        <!-- Overlay shown before game starts -->
+        <div class="emulator-overlay" id="emulator-overlay">
+          <div class="emulator-logo">GBA</div>
+          <p id="overlay-msg" style="color:var(--text-secondary);font-size:1rem;">Loading emulator…</p>
+          <div class="progress-bar" style="width:240px;">
+            <div class="progress-fill" id="load-progress" style="width:0%"></div>
+          </div>
+          <button class="btn btn-primary btn-lg" id="start-game-btn" style="display:none;">
+            ▶ Start Game
+          </button>
+        </div>
+
+        <!-- Spectator view: grid of live player feeds / maximized single player -->
+        <div id="spectator-container" style="display:none;width:100%;height:100%;flex-direction:column;">
+          <!-- Grid of live miniatures (default view) -->
+          <div id="spectator-grid" class="spectator-grid"></div>
+          <!-- Maximized single-player view (shown when a player is clicked) -->
+          <div id="spectator-main" style="display:none;flex:1;min-height:0;position:relative;align-items:center;justify-content:center;background:#000;">
+            <img id="spectator-view" class="spectator-frame" alt="Game stream">
+            <button id="spectator-back-btn" class="btn btn-ghost btn-sm spectator-back-btn" style="display:none;">← Back to Grid</button>
+          </div>
+        </div>
+
+        <!-- EmulatorJS GBA container -->
+        <div id="gba-emulator" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Sidebar: players + chat / watch toggle -->
+    <div class="game-sidebar">
+      <!-- Player list -->
+      <div class="card">
+        <h3 style="margin-bottom:14px;font-size:1rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.08em;">Players</h3>
+        <div class="player-list" id="player-list"></div>
+        <div class="divider"></div>
+        <h3 style="margin-bottom:10px;font-size:.85rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;">Spectators</h3>
+        <div class="player-list" id="spectator-list"></div>
+      </div>
+
+      <!-- Sidebar tab bar -->
+      <div class="sidebar-tabs" id="sidebar-tabs">
+        <button class="sidebar-tab-btn active" id="sidebar-tab-chat" data-tab="chat">💬 Chat</button>
+        <button class="sidebar-tab-btn" id="sidebar-tab-watch" data-tab="watch">👁 Watch</button>
+      </div>
+
+      <!-- Chat panel -->
+      <div class="card chat-box sidebar-panel" id="sidebar-panel-chat" style="flex:1;min-height:0;padding:0;">
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-row">
+          <input type="text" class="chat-input" id="chat-input" placeholder="Type a message…" maxlength="200">
+          <button class="btn btn-primary btn-sm" id="chat-send">Send</button>
+        </div>
+      </div>
+
+      <!-- Watch panel (sidebar spectator grid for other players) -->
+      <div class="card sidebar-panel" id="sidebar-panel-watch" style="flex:1;min-height:0;padding:0;display:none;">
+        <div class="sidebar-spectator-grid" id="sidebar-spectator-grid"></div>
+      </div>
+
+      <!-- Link Cable Diagnostics panel (toggled by 🩺 Diag button) -->
+      <div id="lc-diagnostics-panel" class="card" style="display:none;padding:10px;font-size:.82rem;">
+        <h4 style="margin:0 0 6px;font-size:.9rem;color:var(--text-secondary);">🩺 Link Cable Diagnostics</h4>
+        <pre id="lc-diagnostics-content" style="margin:0;white-space:pre-wrap;color:var(--text-primary);font-family:monospace;font-size:.78rem;line-height:1.4;">Click to refresh diagnostics…</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/peerjs.min.js"></script>
+<script src="/js/socket.io.min.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/pokemonPresence.js"></script>
+<script src="/js/peerLinkCable.js"></script>
+<script src="/js/mgbaBridge.js"></script>
+<script defer src="/js/game.js"></script>
+
+<!-- Compatible ROM selector – shown to non-host players before the game loads -->
+<div id="compat-rom-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);align-items:center;justify-content:center;">
+  <div style="background:var(--bg-secondary,#1e1e2e);border-radius:12px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.5);">
+    <h2 style="margin:0 0 10px;font-size:1.15rem;color:var(--text-primary,#fff);">🎮 Choose Your Game Version</h2>
+    <p style="margin:0 0 16px;font-size:.9rem;color:var(--text-secondary,#aaa);">
+      The host is using a compatible Pokémon game. Select your version to play — you can trade and battle across versions!
+    </p>
+    <select id="compat-rom-select" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border,#333);background:var(--bg-primary,#13131f);color:var(--text-primary,#fff);font-size:.95rem;margin-bottom:16px;"></select>
+    <button id="compat-rom-confirm-btn" class="btn btn-primary" style="width:100%;padding:10px;">▶ Start with This Version</button>
+  </div>
+</div>
+</body>
+</html>
